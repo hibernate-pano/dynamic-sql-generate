@@ -1,0 +1,1 @@
+# This package contains SQL templates for different business types 
