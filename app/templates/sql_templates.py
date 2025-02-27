@@ -250,6 +250,8 @@ def load_templates_from_file():
                 logger.info(f"Loaded template for business type: {biz_type} from file")
                 
             logger.info(f"Loaded {len(file_templates)} SQL templates from file")
+        else:
+            logger.info("No external SQL templates file found. Using built-in templates only.")
             
     except Exception as e:
         logger.warning(f"Failed to load SQL templates from file: {str(e)}")

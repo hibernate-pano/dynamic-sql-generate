@@ -13,17 +13,17 @@ logger = logging.getLogger(__name__)
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
+def init_bp(app):
+    """Initialize the blueprint with the app context"""
+    with app.app_context():
+        load_templates_from_file()
+
 # Define validation schema
 class QueryRequestSchema(Schema):
     biz_type = fields.String(required=True, validate=validate.Length(min=1))
     parameters = fields.Dict(required=True)
     group_parameters = fields.String(required=False)
     sort_parameters = fields.List(fields.Dict(), required=False)
-
-@api_bp.before_app_first_request
-def before_first_request():
-    """Load templates from file when the app starts"""
-    load_templates_from_file()
 
 @api_bp.route('/query', methods=['POST'])
 def query():

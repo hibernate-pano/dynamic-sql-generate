@@ -42,29 +42,6 @@ def create_app(config_name=None):
     from app.database import db
     db.init_app(app)
     
-    # Register blueprints
-    from app.api.routes import api_bp
-    app.register_blueprint(api_bp)
-    
-    # Add health check endpoint
-    @app.route('/health')
-    def health_check():
-        # Check database connection
-        db_status = "healthy"
-        try:
-            # Quick query to check database connection
-            with app.app_context():
-                db.get_connection()
-        except Exception as e:
-            db_status = f"unhealthy: {str(e)}"
-        
-        return {
-            "status": "healthy" if db_status == "healthy" else "degraded",
-            "service": "dynamic-sql-generator",
-            "database": db_status,
-            "environment": app.config.get('ENV', 'development')
-        }, 200 if db_status == "healthy" else 503
-    
     # Add global error handlers
     @app.errorhandler(404)
     def not_found(error):
@@ -89,5 +66,29 @@ def create_app(config_name=None):
             "error": "Internal server error",
             "code": "SERVER_ERROR"
         }), 500
+    
+    # Register blueprints
+    from app.api.routes import api_bp, init_bp
+    app.register_blueprint(api_bp)
+    init_bp(app)
+    
+    # Add health check endpoint
+    @app.route('/health')
+    def health_check():
+        # Check database connection
+        db_status = "healthy"
+        try:
+            # Quick query to check database connection
+            with app.app_context():
+                db.get_connection()
+        except Exception as e:
+            db_status = f"unhealthy: {str(e)}"
+        
+        return {
+            "status": "healthy" if db_status == "healthy" else "degraded",
+            "service": "dynamic-sql-generator",
+            "database": db_status,
+            "environment": app.config.get('ENV', 'development')
+        }, 200 if db_status == "healthy" else 503
     
     return app 
