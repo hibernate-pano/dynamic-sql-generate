@@ -45,13 +45,15 @@ class SQLService:
         return key
     
     @staticmethod
-    def process_template(biz_type, parameters):
+    def process_template(biz_type, parameters, group_parameters=None, sort_parameters=None):
         """
         Process SQL template with given parameters
         
         Args:
             biz_type: Business type to determine which SQL template to use
             parameters: Dictionary of parameters to fill into the template
+            group_parameters: Comma-separated field names to group by
+            sort_parameters: List of dictionaries with sort_param and sort_type
             
         Returns:
             Rendered SQL query string or None if template not found
@@ -67,7 +69,7 @@ class SQLService:
         
         # Check cache first
         cache_key = SQLService._generate_cache_key(biz_type, parameters)
-        if cache_key in SQLService._sql_cache:
+        if cache_key in SQLService._sql_cache and not group_parameters and not sort_parameters:
             SQLService._cache_hits += 1
             logger.debug(f"Cache hit for business type '{biz_type}' (hits: {SQLService._cache_hits}, misses: {SQLService._cache_misses})")
             return SQLService._sql_cache[cache_key]
@@ -79,6 +81,55 @@ class SQLService:
         if not template_str:
             logger.error(f"Unknown business type: {biz_type}")
             raise ValueError(f"Unknown business type: {biz_type}")
+        
+        # Add dynamic GROUP BY if provided
+        if group_parameters:
+            group_fields = [field.strip() for field in group_parameters.split(',')]
+            group_by_clause = f"GROUP BY {', '.join(group_fields)}"
+            
+            # Check if there's already a GROUP BY in the template
+            if "GROUP BY" in template_str:
+                # Replace existing GROUP BY with our dynamic one
+                template_str = template_str.split("GROUP BY")[0] + group_by_clause
+                
+                # Check if there's a HAVING clause to preserve
+                if "HAVING" in template_str:
+                    having_clause = "HAVING" + template_str.split("HAVING")[1].split("ORDER BY")[0]
+                    template_str = template_str.split("HAVING")[0] + having_clause
+            else:
+                # Add GROUP BY before ORDER BY if it exists
+                if "ORDER BY" in template_str:
+                    template_str = template_str.split("ORDER BY")[0] + group_by_clause + "\nORDER BY" + template_str.split("ORDER BY")[1]
+                else:
+                    # Add at the end if no ORDER BY
+                    template_str += f"\n{group_by_clause}"
+        
+        # Add dynamic ORDER BY if provided
+        if sort_parameters and isinstance(sort_parameters, list) and len(sort_parameters) > 0:
+            sort_clauses = []
+            for sort_item in sort_parameters:
+                if isinstance(sort_item, dict) and 'sort_param' in sort_item and 'sort_type' in sort_item:
+                    sort_param = sort_item['sort_param']
+                    sort_type = sort_item['sort_type'].upper()
+                    if sort_type not in ['ASC', 'DESC']:
+                        sort_type = 'ASC'  # Default to ascending
+                    sort_clauses.append(f"{sort_param} {sort_type}")
+            
+            if sort_clauses:
+                order_by_clause = f"ORDER BY {', '.join(sort_clauses)}"
+                
+                # Check if there's already an ORDER BY in the template
+                if "ORDER BY" in template_str:
+                    # Replace existing ORDER BY with our dynamic one
+                    template_str = template_str.split("ORDER BY")[0] + order_by_clause
+                    
+                    # Check if there's a LIMIT clause to preserve
+                    if "LIMIT" in template_str:
+                        limit_clause = "LIMIT" + template_str.split("LIMIT")[1]
+                        template_str = template_str.split("LIMIT")[0] + limit_clause
+                else:
+                    # Add at the end if no ORDER BY
+                    template_str += f"\n{order_by_clause}"
         
         try:
             # Render the template with parameters
@@ -99,8 +150,10 @@ class SQLService:
                 except Exception:
                     # If that fails, just clear the whole cache
                     SQLService._sql_cache.clear()
-                    
-            SQLService._sql_cache[cache_key] = sql
+            
+            # Only cache if no dynamic parameters were used
+            if not group_parameters and not sort_parameters:
+                SQLService._sql_cache[cache_key] = sql
             
             return sql
         except jinja2.exceptions.TemplateError as e:
@@ -108,13 +161,15 @@ class SQLService:
             raise ValueError(f"Error rendering SQL template: {str(e)}")
     
     @staticmethod
-    def execute_dynamic_query(biz_type, parameters):
+    def execute_dynamic_query(biz_type, parameters, group_parameters=None, sort_parameters=None):
         """
         Generate and execute a dynamic SQL query based on business type and parameters
         
         Args:
             biz_type: Business type to determine which SQL template to use
             parameters: Dictionary of parameters to fill into the template
+            group_parameters: Comma-separated field names to group by
+            sort_parameters: List of dictionaries with sort_param and sort_type
             
         Returns:
             Query result (list of dictionaries)
@@ -125,7 +180,7 @@ class SQLService:
         start_time = time.time()
         
         # Process the template
-        sql = SQLService.process_template(biz_type, parameters)
+        sql = SQLService.process_template(biz_type, parameters, group_parameters, sort_parameters)
         
         # Extract only the parameters that should be passed to the SQL query
         # (excluding any that were only used for template conditionals)

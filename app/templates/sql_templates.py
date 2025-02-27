@@ -125,6 +125,42 @@ SQL_TEMPLATES = {
             {% else %}
                 p.product_name
             {% endif %}
+    """,
+    
+    # Add grassroots governance event template
+    "event_flow": """
+        SELECT 
+            e.id,
+            e.title,
+            e.description,
+            e.status,
+            e.create_time,
+            e.update_time,
+            e.tenant_id,
+            d.name as department_name,
+            u.name as creator_name
+        FROM 
+            event e
+        LEFT JOIN 
+            department d ON e.department_id = d.id
+        LEFT JOIN 
+            user u ON e.creator_id = u.id
+        WHERE 
+            e.create_time BETWEEN :start_date AND :end_date
+        {% if department_id %}
+            AND e.department_id = :department_id
+        {% endif %}
+        {% if status %}
+            AND e.status = :status
+        {% endif %}
+        {% if tenant_id %}
+            AND e.tenant_id = :tenant_id
+        {% endif %}
+        {% if keyword %}
+            AND (e.title LIKE CONCAT('%', :keyword, '%') OR e.description LIKE CONCAT('%', :keyword, '%'))
+        {% endif %}
+        ORDER BY 
+            e.create_time DESC
     """
 }
 
@@ -172,6 +208,19 @@ TEMPLATE_METADATA = {
             "supplier_id": "integer",
             "category_id": "integer",
             "sort_by_stock": "boolean"
+        }
+    },
+    "event_flow": {
+        "description": "查询基层治理事件信息流转数据",
+        "required_params": ["start_date", "end_date"],
+        "optional_params": ["department_id", "status", "tenant_id", "keyword"],
+        "param_types": {
+            "start_date": "date",
+            "end_date": "date",
+            "department_id": "integer",
+            "status": "string",
+            "tenant_id": "integer",
+            "keyword": "string"
         }
     }
 }

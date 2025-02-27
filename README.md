@@ -107,9 +107,32 @@ dynamic-SQL-generate/
     "customer_id": 12345,
     "start_date": "2023-01-01",
     "end_date": "2023-12-31"
-  }
+  },
+  "group_parameters": "customer_id,product_category",
+  "sort_parameters": [
+    {
+      "sort_param": "purchase_date",
+      "sort_type": "desc"
+    },
+    {
+      "sort_param": "amount",
+      "sort_type": "desc"
+    }
+  ]
 }
 ```
+
+**字段说明:**
+
+- `biz_type`: (必填) 业务类型，用于确定使用哪个 SQL 模板
+- `parameters`: (必填) 参数对象，用于填充 SQL 模板中的占位符
+- `group_parameters`: (可选) 逗号分隔的字段名列表，用于动态指定 GROUP BY 子句
+- `sort_parameters`: (可选) 排序参数列表，每个排序参数包含以下字段:
+  - `sort_param`: 排序字段名
+  - `sort_type`: 排序方式，值为 "asc" (升序)或 "desc" (降序)
+
+如果提供了`group_parameters`，它将覆盖模板中的任何 GROUP BY 子句。
+如果提供了`sort_parameters`，它将覆盖模板中的任何 ORDER BY 子句。
 
 **成功响应 (JSON):**
 
@@ -345,3 +368,112 @@ TEMPLATE_METADATA["new_template"] = {
 ## 许可证
 
 本项目采用 MIT 许可证 - 详情请参阅 LICENSE 文件
+
+## 高级查询功能
+
+### 动态分组
+
+通过`group_parameters`参数，您可以动态指定 SQL 查询的 GROUP BY 子句，无需修改 SQL 模板。这对于灵活的数据分析和聚合非常有用。
+
+**示例：**
+
+```json
+{
+  "biz_type": "event_flow",
+  "parameters": {
+    "start_date": "2023-01-01",
+    "end_date": "2023-12-31"
+  },
+  "group_parameters": "tenant_id,status"
+}
+```
+
+这将生成一个按`tenant_id`和`status`分组的查询，并覆盖模板中原有的 GROUP BY 子句。
+
+### 动态排序
+
+通过`sort_parameters`参数，您可以动态指定 SQL 查询的 ORDER BY 子句，支持多字段排序和不同的排序方向。
+
+**示例：**
+
+```json
+{
+  "biz_type": "event_flow",
+  "parameters": {
+    "start_date": "2023-01-01",
+    "end_date": "2023-12-31"
+  },
+  "sort_parameters": [
+    {
+      "sort_param": "create_time",
+      "sort_type": "desc"
+    },
+    {
+      "sort_param": "id",
+      "sort_type": "asc"
+    }
+  ]
+}
+```
+
+这将生成一个按`create_time`降序和`id`升序排序的查询，并覆盖模板中原有的 ORDER BY 子句。
+
+### 组合使用
+
+您可以同时使用动态分组和动态排序功能：
+
+```json
+{
+  "biz_type": "event_flow",
+  "parameters": {
+    "start_date": "2023-01-01",
+    "end_date": "2023-12-31",
+    "tenant_id": 100
+  },
+  "group_parameters": "department_id,status",
+  "sort_parameters": [
+    {
+      "sort_param": "status",
+      "sort_type": "asc"
+    },
+    {
+      "sort_param": "count(*)",
+      "sort_type": "desc"
+    }
+  ]
+}
+```
+
+### 实际场景示例：基层治理事件信息流转
+
+对于基层治理事件信息流转表的多表关联查询，可以使用以下请求：
+
+```json
+{
+  "biz_type": "event_flow",
+  "parameters": {
+    "start_date": "2023-01-01",
+    "end_date": "2023-12-31",
+    "tenant_id": 12345,
+    "status": "处理中"
+  },
+  "group_parameters": "tenant_id,status",
+  "sort_parameters": [
+    {
+      "sort_param": "create_time",
+      "sort_type": "desc"
+    },
+    {
+      "sort_param": "id",
+      "sort_type": "asc"
+    }
+  ]
+}
+```
+
+此查询将：
+
+1. 使用`event_flow`模板基础查询
+2. 按`tenant_id`和`status`进行分组
+3. 按`create_time`降序和`id`升序排序
+4. 过滤日期范围、租户 ID 和状态

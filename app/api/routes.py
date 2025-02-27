@@ -17,6 +17,8 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 class QueryRequestSchema(Schema):
     biz_type = fields.String(required=True, validate=validate.Length(min=1))
     parameters = fields.Dict(required=True)
+    group_parameters = fields.String(required=False)
+    sort_parameters = fields.List(fields.Dict(), required=False)
 
 @api_bp.before_app_first_request
 def before_first_request():
@@ -50,6 +52,10 @@ def query():
         biz_type = validated_data['biz_type']
         parameters = validated_data['parameters']
         
+        # Get optional group_parameters and sort_parameters
+        group_parameters = validated_data.get('group_parameters')
+        sort_parameters = validated_data.get('sort_parameters')
+        
         logger.info(f"Received query request for business type: {biz_type}")
         
         # Process date strings into proper format if needed
@@ -64,7 +70,12 @@ def query():
                     pass
         
         # Execute query
-        result = sql_service.execute_dynamic_query(biz_type, parameters)
+        result = sql_service.execute_dynamic_query(
+            biz_type, 
+            parameters, 
+            group_parameters=group_parameters, 
+            sort_parameters=sort_parameters
+        )
         
         # Build response
         total_time = int((time.time() - start_time) * 1000)  # Total API time in ms
